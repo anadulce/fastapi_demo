@@ -1,8 +1,8 @@
-"""create genre and movie table
+"""mensagem de criação
 
-Revision ID: c268630b65b7
+Revision ID: 87941c15f679
 Revises: 
-Create Date: 2024-11-24 09:41:37.653075
+Create Date: 2024-11-24 19:32:34.788032
 
 """
 from typing import Sequence, Union
@@ -12,7 +12,7 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision: str = 'c268630b65b7'
+revision: str = '87941c15f679'
 down_revision: Union[str, None] = None
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
@@ -33,10 +33,10 @@ def upgrade() -> None:
     sa.Column('title', sa.String(), nullable=False),
     sa.Column('director', sa.String(), nullable=False),
     sa.Column('year', sa.Integer(), nullable=False),
-    sa.Column('genre', sa.Integer(), nullable=False),
+    sa.Column('genre_id', sa.Integer(), nullable=False),
     sa.Column('created_at', sa.DateTime(), nullable=False),
     sa.Column('updated_at', sa.DateTime(), nullable=False),
-    sa.ForeignKeyConstraint(['genre'], ['genre.id'], ),
+    sa.ForeignKeyConstraint(['genre_id'], ['genre.id'], ),
     sa.PrimaryKeyConstraint('id')
     )
     # ### end Alembic commands ###

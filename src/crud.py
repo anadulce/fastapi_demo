@@ -1,51 +1,60 @@
 from typing import Optional, Type, TypeVar
 from sqlalchemy.orm import Session
-
-
-# from sqlmodel import Session, SQLModel, select
-
-# T = TypeVar("T", bound=SQLModel)
+from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 
 
 def create(session: Session, model, data):
-    obj = model(**data.model_dump())
-    session.add(obj)
-    session.flush()
-    session.refresh(obj)
-    return obj
+    try:
+        obj = model(**data.model_dump())
+        session.add(obj)
+        session.commit()
+        session.refresh(obj)
+        return obj
+    except IntegrityError:
+        None
 
 
-# def get_all(session: Session, model: Type[T]) -> list[T]:
-#     query = select(model)
-#     return session.exec(query).all()
+def get_all(session: Session, model):
+    query = select(model)
+    return session.scalars(query).all()
 
 
-# def get_one(session: Session, model: Type[T], id: int) -> Optional[T]:
-#     query = select(model).where(model.id == id)
-#     return session.exec(query).one_or_none()
+def get_offset(session: Session, model, offset, limit):
+    query = select(model).offset(offset*limit).limit(limit)
+    return session.scalars(query).all()
 
 
-# def update(session: Session, model: Type[T], id: int, data: T) -> Optional[T]:
-#     query = select(model).where(model.id == id)
-#     obj = session.exec(query).one_or_none()
-
-#     if not obj:
-#         return None
-
-#     obj.sqlmodel_update(data.model_dump(exclude_unset=True))
-
-#     session.flush()
-#     session.refresh(obj)
-#     return obj
+def get_one(session: Session, model, id: int):
+    query = select(model).where(model.id == id)
+    return session.scalars(query).one_or_none()
 
 
-# def delete(session: Session, model: Type[T], id: int) -> bool:
-#     query = select(model).where(model.id == id)
-#     obj = session.exec(query).one_or_none()
+def update(session: Session, model, id: int, data):
+    query = select(model).where(model.id == id)
+    obj = session.scalars(query).one_or_none()
+    if obj is None:
+        return None, "not found"
 
-#     if not obj:
-#         return False
+    
+    for attr, value in data.dict(exclude_unset=True).items():
+        setattr(obj, attr, value)
 
-#     session.delete(obj)
-#     session.flush()
-#     return True
+    try:
+        session.commit()
+        session.refresh(obj)
+        return obj, None
+    except IntegrityError:
+        return None, "already exists"
+
+
+def delete(session: Session, model, id: int) -> bool:
+    query = select(model).where(model.id == id)
+    obj = session.scalars(query).one_or_none()
+
+    if obj is None:
+        return False
+
+    session.delete(obj)
+    session.commit()
+    return True

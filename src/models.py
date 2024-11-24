@@ -17,6 +17,9 @@ class Genre:
     updated_at: Mapped[datetime] = mapped_column(
         default=func.now(), onupdate=func.now()
     )
+    movies: Mapped[list['Movie']] = relationship(
+        init=False, back_populates='genre', cascade='all, delete-orphan'
+    )
 
 
 @table_registry.mapped_as_dataclass
@@ -28,8 +31,10 @@ class Movie:
     director: Mapped[str]
     year: Mapped[int]
 
-    genre: Mapped[int] = mapped_column(ForeignKey('genre.id'))
-    genre_relationship: Mapped[Genre] = relationship('Genre', backref='movies')
+    genre_id: Mapped[int] = mapped_column(ForeignKey('genre.id'))
+
+    genre: Mapped[Genre] = relationship(init=False, back_populates='movies')
+
 
     created_at: Mapped[datetime] = mapped_column(default=func.now())
     updated_at: Mapped[datetime] = mapped_column(

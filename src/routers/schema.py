@@ -4,34 +4,37 @@ from fastapi import Query
 
 from pydantic import BaseModel
 
+
 class GenreInSchema(BaseModel):
     name: str
 
 
 class GenreOutSchema(GenreInSchema):
+    id: int
     created_at: datetime
     updated_at: datetime
     class Config:
         from_attributes = True
 
-class GenreDBSchema(GenreOutSchema):
-    id: int
-    class Config:
-        from_attributes = True
-
-class GenreUpdateSchema(BaseModel):
-    name: str | None = None
-
+class PageGenreSchema(BaseModel):
+    page: int = 1
+    limit: int = 100
+    genres: list[GenreOutSchema]
 
 class MovieInSchema(BaseModel):
-    name: str
+    title: str
     director: str
     year: int
-    genre: int
+    genre_id: int
 
+class MovieBDSchema(MovieInSchema):
+    genre_relationship: GenreOutSchema
 
-class MovieOutSchema(MovieInSchema):
+class MovieOutSchema(BaseModel):
     id: int
+    title: str
+    director: str
+    year: int
     created_at: datetime
     updated_at: datetime
     genre: GenreOutSchema
@@ -39,23 +42,16 @@ class MovieOutSchema(MovieInSchema):
     class Config:
         from_attributes = True
 
-class MovieUpdateSchema(BaseModel):
-    name: str | None = None
+class MoviePartialUpdateSchema(BaseModel):
+    title: str | None = None
     director: str | None = None
     year: int | None = None
-    genre: int | None = None
-    id: int | None = None
-    genre: int | None = None
+    genre_id: int | None = None
 
-class MovieDBSchema(MovieOutSchema):
-    id: int
-    class Config:
-        from_attributes = True
-
-class PageGenreSchema(BaseModel):
-    offset: int = 0
+class PageMovieSchema(BaseModel):
+    page: int = 1
     limit: int = 100
-    genres: list[GenreOutSchema]
+    movies: list[MovieOutSchema]
 
 class Message(BaseModel):
     message: str
