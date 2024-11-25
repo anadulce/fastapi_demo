@@ -1,6 +1,7 @@
 ---
 marp: true
 theme: rose-pine
+paginate: true
 ---
 
 # Introdução ao FastAPI
@@ -18,7 +19,10 @@ theme: rose-pine
 ---
 
 # Renan 
-
+- Bacharel em Física
+- Trabalho com engenharia de software no Serasa
+- Gosto de vôlei, jogos de tabuleiro e tenho uma tatuagem do desenho Avatar
+- Ajudo na organização de eventos Python Brasil
 ---
 
 # Alinhando expectativas - o que **não** vamos abordar
@@ -262,42 +266,714 @@ sqlite> .quit
 ```
 
 ---
+# Criando Schemas
+
+```python
+from datetime import datetime
+
+from pydantic import BaseModel
+
+
+class Message(BaseModel):
+    message: str 
+
+
+class GenreInSchema(BaseModel):
+    name: str
+```
+---
+
+# Criando Schemas 
+
+```python
+class GenreOutSchema(GenreInSchema):
+    id: int
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class PageGenreSchema(BaseModel):
+    page: int = 1
+    limit: int = 100
+    genres: list[GenreOutSchema]
+```
 
 ---
 
+# CRUD - Criando os endpoints
+
+Agora chegamos ao ponto importante da nossa API, vamos criar nossos endpoints!
+
+---
+# Configs
+```python
+# src/routers/genre.py
+
+from http import HTTPStatus
+from fastapi import APIRouter, Depends
+
+from sqlalchemy.orm import Session
+
+from src.database import get_session
+from src.models import Genre
+from src.routers.schema import GenreInSchema, GenreOutSchema
+
+router = APIRouter(prefix='/genre', tags=['genres'])
+```
+
+---
+# CREATE
+```python
+# src/routers/genre.py
+
+@router.post(
+    '/', 
+    status_code=HTTPStatus.CREATED, 
+    response_model=GenreOutSchema
+    )
+def create_genre(
+    genre: GenreInSchema, 
+    session: Session = Depends(get_session)
+    ):
+    db_genre = Genre(**genre.model_dump())
+    session.add(db_genre)
+    session.commit()
+    session.refresh(db_genre)
+
+    return db_genre
+```
+---
+# Executando o endpoint
+
+
+```bash
+task run
+```
+---
+# Documentação automática
+http://127.0.0.1:8000/docs
+
 
 
 ---
 
+# Refatorando CREATE
+```python
+@router.post(
+    '/',
+    status_code=HTTPStatus.CREATED,
+    response_model=GenreOutSchema,
+)
+def create_genre(
+    genre: GenreInSchema,
+    session: Session = Depends(get_session),
+):
+    try:
+        db_genre = Genre(**genre.model_dump())
+        session.add(db_genre)
+        session.commit()
+        session.refresh(db_genre)
+        return db_genre
+    except IntegrityError:
+        raise HTTPException(
+            HTTPStatus.BAD_REQUEST,
+            detail='Genre already exists',
+        )
+```
+
+---
+# READ - Todos os registros 
+```python
+# src/routers/genre.py
+
+@router.get(
+    '/',
+    status_code=HTTPStatus.OK,
+    response_model=list[GenreOutSchema],
+)
+def read_genre(
+    session: Session = Depends(get_session),
+):
+    genres = session.execute(select(Genre)).scalars().all()
+    return genres
+```
+
+---
+# READ - Paginação
+```python
+# src/routers/genre.py
+
+@router.get('/', response_model=PageGenreSchema)
+def read_genre(
+    page: int = 1,
+    limit: int = 100,
+    session: Session = Depends(get_session),
+):
+    genres = session.scalars(
+        select(Genre)
+        .offset((page - 1) * limit)
+        .limit(limit)
+    ).all()
+
+    return {
+        'page': page,
+        'limit': limit,
+        'genres': genres,
+    }
+```
+---
+# READ - by ID
+```python
+# src/routers/genre.py
+@router.get('/{id}/', response_model=GenreOutSchema)
+def get_genre(
+    id: int,
+    session: Session = Depends(get_session),
+):
+    if genre := session.scalars(
+        select(Genre).where(Genre.id == id)
+    ).one_or_none():
+        return genre
+
+    raise HTTPException(
+        HTTPStatus.BAD_REQUEST,
+        detail='Genre not found',
+    )
+
+```
+---
+# UPDATE - PUT
+```python
+@router.put(
+    '/{id}/',
+    status_code=HTTPStatus.OK,
+    response_model=GenreOutSchema,
+)
+def update_genre(
+    id: int,
+    genre_to_update: GenreInSchema,
+    session: Session = Depends(get_session),
+):
+    if db_genre := session.scalars(
+        select(Genre).where(Genre.id == id)
+    ).one_or_none():
+        try:
+            for (
+                attr, value,
+            ) in genre_to_update.dict(
+                exclude_unset=True
+            ).items():
+                setattr(db_genre, attr, value)
+            session.add(db_genre)
+```
+---
+# UPDATE - PUT
+```python
+            session.commit()
+            session.refresh(db_genre)
+            return db_genre
+        except IntegrityError:
+            raise HTTPException(
+        HTTPStatus.BAD_REQUEST,
+        detail='Genre already exists',
+    )
+    raise HTTPException(
+        HTTPStatus.BAD_REQUEST,
+        detail='Genre not found',
+    )
+
+```
+---
+# UPDATE - PATCH
+```python
+@router.patch(
+    '/{id}/',
+    status_code=HTTPStatus.OK,
+    response_model=GenreOutSchema,
+)
+def partial_update_genre(
+    id: int,
+    genre_to_update: GenreInSchema,
+    session: Session = Depends(get_session),
+):
+    if db_genre := session.scalars(
+        select(Genre).where(Genre.id == id)
+    ).one_or_none():
+        try:
+            for (
+                attr,
+                value,
+            ) in genre_to_update.dict(
+                exclude_unset=True
+            ).items():
+                setattr(db_genre, attr, value)
+            session.add(db_genre)
+```
+---
+# UPDATE - PATCH
+```python
+# src/routers/genre.py
+            session.commit()
+            session.refresh(db_genre)
+            return db_genre
+        except IntegrityError:
+            raise HTTPException(
+        HTTPStatus.BAD_REQUEST,
+        detail='Genre already exists',
+    )
+    raise HTTPException(
+        HTTPStatus.BAD_REQUEST,
+        detail='Genre not found',
+    )
+```
+---
+
+# DELETE
+```python
+# src/routers/genre.py
+@router.delete(
+    '/{id}/',
+    status_code=HTTPStatus.OK,
+    response_model=Message,
+)
+def delete_genre(
+    id: int,
+    session: Session = Depends(get_session),
+):
+    if db_genre := session.scalars(
+        select(Genre).where(Genre.id == id)
+    ).one_or_none():
+        session.delete(db_genre)
+        session.commit()
+        return {'message': 'Genre deleted'}
+    raise HTTPException(
+        HTTPStatus.BAD_REQUEST,
+        detail='Genre not found',
+    )
+```
+---
+# Separando o CRUD da view
+---
+
+# CREATE - BD
+```python
+# src/crud.py
+
+def create(session: Session, model, data):
+    try:
+        obj = model(**data.model_dump())
+        session.add(obj)
+        session.commit()
+        session.refresh(obj)
+        return obj
+    except IntegrityError:
+        None
+```
+---
+
+# CREATE - VIEW
+```python
+# src/routers/genre.py
+@router.post(
+    '/',
+    status_code=HTTPStatus.CREATED,
+    response_model=GenreOutSchema,
+)
+def create_genre(
+    genre: GenreInSchema,
+    session: Session = Depends(get_session),
+):
+    if genre := create(session, Genre, genre):
+        return genre
+    raise HTTPException(
+        HTTPStatus.BAD_REQUEST,
+        detail='Genre already exists',
+    )
+```
+---
+
+# READ ALL - BD
+```python
+# src/crud.py
+
+def get_all(session: Session, model):
+    query = select(model)
+    return session.scalars(query).all()
+
+```
+---
 
 
+# READ ALL - VIEW
+```python
+# src/routers/genre.py
 
-poetry add sqlalchemy
+@router.get('/', response_model=list[GenreOutSchema])
+def read_genres(session: Session = Depends(get_session)):
+    return get_all(session, Genre)
 
-poetry add pydantic-settings
+```
 
-.env
-DATABASE_URL="sqlite:///fastapi_demo.db"
+---
 
-poetry add alembic
+# READ PAGINATED - BD
+```python
+# src/crud.py
 
-Inicializa migrações
-alembic init migrations
+def get_offset(session: Session, model, offset, limit):
+    query = (
+        select(model).offset(offset * limit).limit(limit)
+    )
+    return session.scalars(query).all()
+```
+---
 
-Cria migrações
-alembic revision --autogenerate -m "mensagem de criação"
 
+# READ PAGINATED - VIEW
+```python
+# src/routers/genre.py
 
-Abre terminal interativo
-sqlite3 fastapi_demo.db
+@router.get('/pages/', response_model=PageGenreSchema)
+def read_genres_by_page(
+    page: int = 1,
+    limit: int = 100,
+    session: Session = Depends(get_session),
+):
+    genres = get_offset(session, Genre, page - 1, limit)
 
-Só mostrar as tabelas que tem no banco (só a do alembic)
-sqlite> .schema
-sair: .quit ou uns control C 
+    return {'page': page, 'limit': limit, 'genres': genres}
 
-Aplica migrações
-alembic upgrade head
+```
+---
 
-Só mostrar as tabelas que o alembic criou
-sqlite> .schema
-sair: .quit ou uns control C 
+# READ ONE - BD
+```python
+# src/crud.py
+
+def get_one(session: Session, model, id: int):
+    query = select(model).where(model.id == id)
+    return session.scalars(query).one_or_none()
+
+```
+---
+
+# READ ONE - VIEW
+```python
+# src/routers/genre.py
+
+@router.get('/{id}/', response_model=GenreOutSchema)
+def read_genres(
+    id: int, session: Session = Depends(get_session)
+):
+    if genre := get_one(session, Genre, id):
+        return genre
+
+    raise HTTPException(
+        HTTPStatus.NOT_FOUND, detail='Genre not found'
+    )
+```
+---
+
+# UPDATE ALL TYPES - DB
+```python
+# src/crud.py
+
+def update(session: Session, model, id: int, data):
+    query = select(model).where(model.id == id)
+    obj = session.scalars(query).one_or_none()
+    if obj is None:
+        return None, 'not found'
+    for attr, value in data.dict(
+        exclude_unset=True
+    ).items():
+        setattr(obj, attr, value)
+    try:
+        session.commit()
+        session.refresh(obj)
+        return obj, None
+    except IntegrityError:
+        return None, 'already exists'
+
+```
+---
+
+# TOTAL UPDATE (PUT) - VIEW
+```python
+# src/routers/genre.py
+
+@router.put('/{id}/', response_model=GenreOutSchema)
+def update_genre(
+    id: int,
+    genre_to_update: GenreInSchema,
+    session: Session = Depends(get_session),
+):
+    genre, message = update(
+        session, Genre, id, genre_to_update
+    )
+    if genre:
+        return genre
+    raise HTTPException(
+        HTTPStatus.NOT_FOUND, detail=f'Genre {message}'
+    )
+```
+---
+
+# PARTIAL UPDATE (PATCH) - VIEW
+```python
+# src/routers/genre.py
+@router.patch('/{id}/', response_model=GenreOutSchema)
+def partial_update_genre(
+    id: int,
+    genre_to_update: GenreInSchema,
+    session: Session = Depends(get_session),
+):
+    genre, message = update(
+        session, Genre, id, genre_to_update
+    )
+    if genre:
+        return genre
+    raise HTTPException(
+        HTTPStatus.NOT_FOUND, detail=f'Genre {message}'
+    )
+
+```
+---
+
+# DELETE - BD
+```python
+# src/crud.py
+
+def delete(session: Session, model, id: int) -> bool:
+    query = select(model).where(model.id == id)
+    obj = session.scalars(query).one_or_none()
+
+    if obj is None:
+        return False
+
+    session.delete(obj)
+    session.commit()
+    return True
+```
+---
+
+# DELETE - VIEW
+```python
+# src/routers/genre.py
+@router.delete(
+    '/{id}/',
+    status_code=HTTPStatus.OK,
+    response_model=Message,
+)
+def delete_genre(
+    id: int, session: Session = Depends(get_session)
+):
+    if delete(session, Genre, id):
+        return {'message': 'Genre deleted'}
+
+    raise HTTPException(
+        HTTPStatus.NOT_FOUND, detail='Genre not found'
+    )
+
+```
+---
+# Criar rotas para Movie
+---
+# Importando dependências
+```python
+# src/routers/movie.py
+
+from http import HTTPStatus
+
+from fastapi import (
+    APIRouter,
+    Depends,
+    HTTPException,
+)
+from sqlalchemy.orm import Session
+
+from src.crud import (
+    create,
+    delete,
+    get_all,
+    get_offset,
+    get_one,
+    update,
+)
+
+```
+---
+# Importando dependências
+```python
+# src/routers/movie.py
+
+from src.database import get_session
+from src.models import Movie
+from src.routers.schema import (
+    Message,
+    MovieInSchema,
+    MovieOutSchema,
+    MoviePartialUpdateSchema,
+    PageMovieSchema,
+)
+
+router = APIRouter(prefix='/movie', tags=['movies'])
+
+```
+---
+# CREATE - VIEW
+```python
+# src/routers/movie.py
+
+@router.post(
+    '/',
+    status_code=HTTPStatus.CREATED,
+    response_model=MovieOutSchema,
+)
+def create_movie(
+    movie: MovieInSchema,
+    session: Session = Depends(get_session),
+):
+    if movie := create(session, Movie, movie):
+        return movie
+    raise HTTPException(
+        HTTPStatus.BAD_REQUEST,
+        detail='Movie already exists',
+    )
+```
+---
+# READ ALL - VIEW
+```python
+# src/routers/movie.py
+
+@router.get(
+    '/',
+    response_model=list[MovieOutSchema],
+)
+def read_movies(
+    session: Session = Depends(get_session),
+):
+    return get_all(session, Movie)
+
+```
+---
+# PAGINATED READ - VIEW
+```python
+# src/routers/movie.py
+
+@router.get(
+    '/pages/',
+    response_model=PageMovieSchema,
+)
+def read_movies_by_page(
+    page: int = 1,
+    limit: int = 100,
+    session: Session = Depends(get_session),
+):
+    movies = get_offset(session, Movie, page - 1, limit)
+
+    return {
+        'page': page,
+        'limit': limit,
+        'movies': movies,
+    }
+```
+---
+# READ ONE - VIEW
+```python
+# src/routers/movie.py
+
+@router.get(
+    '/{id}/',
+    response_model=MovieOutSchema,
+)
+def read_movies(
+    id: int,
+    session: Session = Depends(get_session),
+):
+    if movie := get_one(session, Movie, id):
+        return movie
+
+    raise HTTPException(
+        HTTPStatus.NOT_FOUND,
+        detail='Movie not found',
+    )
+```
+---
+# TOTAL UPDATE (PUT) - VIEW
+```python
+# src/routers/movie.py
+
+@router.put(
+    '/{id}/',
+    response_model=MovieOutSchema,
+)
+def update_movie(
+    id: int,
+    movie_to_update: MovieInSchema,
+    session: Session = Depends(get_session),
+):
+    movie, message = update(
+        session,
+        Movie,
+        id,
+        movie_to_update,
+    )
+    if movie:
+        return movie
+    raise HTTPException(
+        HTTPStatus.NOT_FOUND,
+        detail=f'Movie {message}',
+    )
+```
+---
+# PARTIAL UPDATE (PATCH) - VIEW
+```python
+# src/routers/movie.py
+
+@router.patch(
+    '/{id}/',
+    response_model=MovieOutSchema,
+)
+def partial_update_movie(
+    id: int,
+    movie_to_update: MoviePartialUpdateSchema,
+    session: Session = Depends(get_session),
+):
+    movie, message = update(
+        session,
+        Movie,
+        id,
+        movie_to_update,
+    )
+    if movie:
+        return movie
+    raise HTTPException(
+        HTTPStatus.NOT_FOUND,
+        detail=f'Movie {message}',
+    )
+```
+---
+# DELETE - VIEW
+```python
+# src/routers/movie.py
+
+@router.delete(
+    '/{id}/',
+    status_code=HTTPStatus.OK,
+    response_model=Message,
+)
+def delete_movie(
+    id: int,
+    session: Session = Depends(get_session),
+):
+    if delete(session, Movie, id):
+        return {'message': 'Movie deleted'}
+
+    raise HTTPException(
+        HTTPStatus.NOT_FOUND,
+        detail='Movie not found',
+    )
+```
