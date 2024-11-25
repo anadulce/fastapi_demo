@@ -1,7 +1,12 @@
 from datetime import datetime
 
 from sqlalchemy import ForeignKey, func
-from sqlalchemy.orm import Mapped, mapped_column, registry, relationship
+from sqlalchemy.orm import (
+    Mapped,
+    mapped_column,
+    registry,
+    relationship,
+)
 
 table_registry = registry()
 
@@ -15,10 +20,13 @@ class Genre:
 
     created_at: Mapped[datetime] = mapped_column(default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
-        default=func.now(), onupdate=func.now()
+        default=func.now(),
+        onupdate=func.now(),
     )
     movies: Mapped[list['Movie']] = relationship(
-        init=False, back_populates='genre', cascade='all, delete-orphan'
+        init=False,
+        back_populates='genre',
+        cascade='all, delete-orphan',
     )
 
 
@@ -33,9 +41,13 @@ class Movie:
 
     genre_id: Mapped[int] = mapped_column(ForeignKey('genre.id'))
 
-    genre: Mapped[Genre] = relationship(init=False, back_populates='movies')
+    genre: Mapped[Genre] = relationship(
+        init=False,
+        back_populates='movies',
+    )
 
     created_at: Mapped[datetime] = mapped_column(default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
-        default=func.now(), onupdate=func.now()
+        default=func.now(),
+        onupdate=func.now(),
     )
