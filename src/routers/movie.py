@@ -24,9 +24,7 @@ def create_movie(
     movie: MovieInSchema,
     session: Session = Depends(get_session),
 ):
-    if movie := create(session, Movie, movie):
-        return movie
-    raise HTTPException(HTTPStatus.BAD_REQUEST, detail='Movie already exists')
+    return create(session, Movie, movie)
 
 
 @router.get('/', response_model=list[MovieOutSchema])

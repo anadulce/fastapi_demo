@@ -39,7 +39,7 @@ lint = 'ruff check .; ruff check . --diff'
 format = 'ruff check . --fix; ruff format .'
 run = 'fastapi dev src/app.py'
 pre_test = 'task lint'
-test = 'pytest -s -x --cov=fast_zero -vv'
+test = 'pytest -s -x --cov=fastapi_demo -vv'
 post_test = 'coverage html'
 
 [build-system]

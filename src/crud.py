@@ -13,6 +13,7 @@ def create(session: Session, model, data):
         session.refresh(obj)
         return obj
     except IntegrityError:
+        session.rollback()
         None
 
 
@@ -43,6 +44,7 @@ def update(session: Session, model, id: int, data):
         session.refresh(obj)
         return obj, None
     except IntegrityError:
+        session.rollback()
         return None, 'already exists'
 
 
